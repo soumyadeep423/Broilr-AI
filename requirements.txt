@@ -6,4 +6,3 @@ gemini
 pymongo
 google.generativeai
 bcrypt
-json
