@@ -1,7 +1,12 @@
 services:
   - type: web
     name: robochef-backend
+    runtime: python
     env: python
+    region: oregon
+    plan: free
+    branch: main
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python app.py"
+    autoDeploy: true
     pythonVersion: 3.12.0
