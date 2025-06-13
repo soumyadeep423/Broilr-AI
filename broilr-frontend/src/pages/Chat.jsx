@@ -60,7 +60,8 @@ function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
-  const lastTranscriptRef = useRef("");
+  // const lastTranscriptRef = useRef("");
+  const timeoutRef = useRef(null);
   // let recognition = null;
 
   const clearChat = () => {
@@ -71,57 +72,64 @@ function Chat() {
     setFlow("dish");  // directly jump to dish input
   };
   const startListening = () => {
-      const SpeechRecognition = window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        alert("Speech recognition not supported.");
-        return;
-      }
+  const SpeechRecognition = window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("🎤 Speech recognition not supported.");
+    return;
+  }
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
+  const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
 
-      recognition.onresult = (event) => {
-        let transcript = event.results[event.results.length - 1][0].transcript;
-        transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
+    let lastTranscript = "";
 
-        if (transcript === lastTranscriptRef.current) return;
-        lastTranscriptRef.current = transcript;
+    recognition.onresult = (event) => {
+      let transcript = event.results[event.results.length - 1][0].transcript;
+      transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
-        console.log("🗣️ Heard:", transcript);
-        setInput(transcript);
-        send(transcript);
-      };
+      if (transcript === lastTranscript) return;
+      lastTranscript = transcript;
 
-      recognition.onerror = (e) => {
-        console.error("Speech recognition error:", e.error);
-      };
-
-      recognition.onend = () => {
-        console.log("🎙️ Recognition ended");
-
-        
-        if (isListeningRef.current && flow === "cooking") {
-          console.log("🔄 Restarting recognition...");
-          setTimeout(() => startListening(), 7000); 
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-      isListeningRef.current = true;
-      setIsListening(true);
+      console.log("🗣️ Heard:", transcript);
+      setInput(transcript);
+      send(transcript);
     };
+
+    recognition.onerror = (e) => {
+      console.error("Speech recognition error:", e.error);
+    };
+
+    recognition.onend = () => {
+      console.log("🎙️ Recognition ended");
+
+      if (isListeningRef.current) {
+        // Automatically restart after 7 seconds
+        timeoutRef.current = setTimeout(() => {
+          console.log("🔄 Restarting recognition...");
+          startListening(); // recursively start again
+        }, 7000);
+      }
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    isListeningRef.current = true;
+    setIsListening(true);
+  };
+
 
     const stopListening = () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
+      clearTimeout(timeoutRef.current); // stop retry loop
       isListeningRef.current = false;
       setIsListening(false);
     };
+
 
     useEffect(() => {
     const container = scrollContainerRef.current;
@@ -130,12 +138,6 @@ function Chat() {
     }
     }, [chat]);
 
-    useEffect(() => {
-      const lastMsg = chat[chat.length - 1];
-      if (lastMsg?.role === "assistant") {
-        startListening(); 
-      }
-    }, [chat]);
 
   useEffect(() => {
     if (!username) navigate("/");
@@ -318,12 +320,18 @@ function Chat() {
         });
         setRecipe(res.data.recipe);
         setIsNewRecipe(true);
+        const ingredientsText = res.data.recipe.ingredients.map((ing, i) =>
+          `${i + 1}. ${ing.quantity} ${ing.unit || ""} ${ing.name}${ing.preparation ? ` (${ing.preparation})` : ""}`
+        ).join("\n");
+
         setChat(prev => [
           ...prev,
           { role: "assistant", text: "✅ Recipe Generated!" },
-          { role: "assistant", text: `🥣 Your recipe has ${res.data.recipe.ingredients.length} ingredients and ${res.data.recipe.steps.length} steps.` },
+          { role: "assistant", text: `🥣 Ingredients:\n\n${ingredientsText}` },
+          { role: "assistant", text: `📝 Steps: ${res.data.recipe.steps.length}` },
           { role: "assistant", text: "🍳 Ready to start cooking? (yes/no)" },
         ]);
+
         setFlow("start_cooking");
       }
       break;
