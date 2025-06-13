@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
-let recognition = null;
 
 const normalizeNumberInput = (input) => {
   const map = {
@@ -59,6 +58,11 @@ function Chat() {
   const [step, setStep] = useState(0);
   const scrollContainerRef = useRef(null);
   const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const isListeningRef = useRef(false);
+  const lastTranscriptRef = useRef("");
+  // let recognition = null;
+
   const clearChat = () => {
     setChat([{ role: "assistant", text: "🍽️ What do you want to cook?" }]);
     setInput("");
@@ -67,45 +71,57 @@ function Chat() {
     setFlow("dish");  // directly jump to dish input
   };
   const startListening = () => {
-      if (!("webkitSpeechRecognition" in window)) {
-        alert("🎤 Speech recognition is not supported in this browser.");
+      const SpeechRecognition = window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech recognition not supported.");
         return;
       }
 
-      recognition = new window.webkitSpeechRecognition();
-      recognition.continuous = true;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = "en-US";
 
       recognition.onresult = (event) => {
-        const transcript = event.results[event.results.length - 1][0].transcript.trim();
+        let transcript = event.results[event.results.length - 1][0].transcript;
+        transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+        if (transcript === lastTranscriptRef.current) return;
+        lastTranscriptRef.current = transcript;
+
         console.log("🗣️ Heard:", transcript);
         setInput(transcript);
-
-        setTimeout(() => {
-          send(transcript);
-        }, 100);
+        send(transcript);
       };
 
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
+      recognition.onerror = (e) => {
+        console.error("Speech recognition error:", e.error);
       };
 
       recognition.onend = () => {
-        console.log("🎙️ Restarting voice...");
-        recognition.start(); // restart when it stops
+        console.log("🎙️ Recognition ended");
+
+        
+        if (isListeningRef.current && flow === "cooking") {
+          console.log("🔄 Restarting recognition...");
+          setTimeout(() => startListening(), 600); 
+        }
       };
 
       recognition.start();
+      recognitionRef.current = recognition;
+      isListeningRef.current = true;
       setIsListening(true);
     };
 
     const stopListening = () => {
-      if (recognition) recognition.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      isListeningRef.current = false;
       setIsListening(false);
     };
-
-
 
     useEffect(() => {
     const container = scrollContainerRef.current;
@@ -114,12 +130,19 @@ function Chat() {
     }
     }, [chat]);
 
+    useEffect(() => {
+      const lastMsg = chat[chat.length - 1];
+      if (lastMsg?.role === "assistant") {
+        startListening(); 
+      }
+    }, [chat]);
+
   useEffect(() => {
     if (!username) navigate("/");
   }, [username, navigate]);
 
   const send = async (inputOverride) => {
-  const rawInput = typeof inputOverride === "string" ? inputOverride : input;
+  const rawInput = (typeof inputOverride === "string" ? inputOverride : input) || "";
   const msg = rawInput.trim();
   const normalizedMsg = msg.toLowerCase().replace(/[^\w\s]/g, "").trim();
   if (!msg) return;
@@ -307,37 +330,72 @@ function Chat() {
     }
 
     case "start_cooking": {
-      if (msg.toLowerCase().startsWith("y")) {
+      const normalized = msg.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+      const yesPhrases = [
+        "yes", "yeah", "yep", "sure", "of course", "okay", "ok", "alright",
+        "lets go", "let us begin", "im ready", "ready", "go ahead", "start", "lets start", "lets begin", "lets do this"
+      ];
+      const noPhrases = [
+        "no", "not now", "later", "maybe later", "not yet", "stop", "cancel"
+      ];
+
+      const isYes = yesPhrases.some(p => normalized.includes(p));
+      const isNo = noPhrases.some(p => normalized.includes(p));
+
+      if (isYes) {
         setStep(0);
         setChat(prev => [...prev, {
           role: "assistant",
           text: `👣 Step 1: ${recipe.steps[0].instruction}`
         }]);
         setFlow("cooking");
-      } else {
+      } else if (isNo) {
         setChat(prev => [...prev, {
           role: "assistant",
           text: "👋 Come back when you're ready to cook!"
         }]);
+        setFlow("done");
+      } else {
+        setChat(prev => [...prev, {
+          role: "assistant",
+          text: "❓ Please let me know if you're ready to start cooking (yes/no)."
+        }]);
       }
+
       break;
     }
 
+
     case "cooking": {
-      const currentStep = recipe.steps[step];
       const normalizedMsg = msg.toLowerCase().replace(/[^\w\s]/g, "").trim();
       const nextPhrases = ["next", "go on", "continue", "move ahead", "okay", "done", "lets go", "proceed", "go ahead"];
-
       const isNextCommand = nextPhrases.some(phrase => normalizedMsg.includes(phrase));
 
-      if (isNextCommand) {
+      const repeatPhrases = ["repeat", "say again", "once more", "can you repeat", "again", "please repeat"];
+      const isRepeatCommand = repeatPhrases.some(phrase => normalizedMsg.includes(phrase));
 
-        const nextStep = step + 1;
+      const currentStepIndex = step;
+
+      if (isRepeatCommand) {
+        setChat(prev => [
+          ...prev,
+          { role: "assistant", text: `🔁 ${recipe.steps[currentStepIndex].instruction}` },
+        ]);
+        return;
+      }
+
+      if (isNextCommand) {
+        const nextStep = currentStepIndex + 1;
+
         if (nextStep < recipe.steps.length) {
           setStep(nextStep);
           setChat(prev => [
             ...prev,
-            { role: "assistant", text: `👣 Step ${recipe.steps[nextStep].step_number}: ${recipe.steps[nextStep].instruction}` }
+            {
+              role: "assistant",
+              text: `👣 Step ${recipe.steps[nextStep].step_number}: ${recipe.steps[nextStep].instruction}`
+            }
           ]);
         } else {
           const endChat = [
@@ -355,26 +413,21 @@ function Chat() {
 
           setChat(prev => [...prev, ...endChat]);
         }
-      } else {
-          const repeatPhrases = ["repeat", "say again", "once more", "can you repeat", "again", "please repeat"];
-          const isRepeatCommand = repeatPhrases.some(phrase => normalizedMsg.includes(phrase));
-
-          if (isRepeatCommand) {
-            setChat(prev => [
-              ...prev,
-              { role: "assistant", text: `🔁 ${currentStep.instruction}` },
-            ]);
-            return;
-          }
-        const res = await api.post("/ask_step", {
-          question: msg,
-          step: currentStep,
-          history: [],
-        });
-        setChat(prev => [...prev, { role: "assistant", text: res.data.answer }]);
+        console.log("step index", step)
+        return;
       }
+
+      // If it's not a "next" or "repeat" command, treat it as a question
+      const currentStep = recipe.steps[currentStepIndex];
+      const res = await api.post("/ask_step", {
+        question: msg,
+        step: currentStep,
+        history: [],
+      });
+      setChat(prev => [...prev, { role: "assistant", text: res.data.answer }]);
       break;
     }
+
 
     case "ask_save": {
       const yesPhrases = ["yes", "start", "go ahead", "okay", "let's begin", "ready"];
@@ -509,12 +562,10 @@ function Chat() {
         }}>
           Send
         </button>
-        <button
-          onClick={isListening ? stopListening : startListening}
-          style={buttonStyle}
-        >
+        <button onClick={isListening ? stopListening : startListening} style={buttonStyle}>
           {isListening ? "🛑" : "🎤"}
         </button>
+
 
       </div>
     </div>
