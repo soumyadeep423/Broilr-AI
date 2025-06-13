@@ -104,7 +104,7 @@ function Chat() {
         
         if (isListeningRef.current && flow === "cooking") {
           console.log("🔄 Restarting recognition...");
-          setTimeout(() => startListening(), 600); 
+          setTimeout(() => startListening(), 6000); 
         }
       };
 
