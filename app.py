@@ -13,7 +13,6 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend calls
 
 client = MongoClient(os.getenv("MONGO_URI"))
-print("MONGO_URI =", os.getenv("MONGO_URI"))
 db = client["robochef"]
 users = db["users"]
 
