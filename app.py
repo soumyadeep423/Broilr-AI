@@ -16,6 +16,9 @@ client = MongoClient(os.getenv("MONGO_URI"))
 db = client["robochef"]
 users = db["users"]
 
+@app.route("/", methods=["GET"])
+def home():
+    return "Backend Service Running....."
 
 # ------------------------
 # Auth Routes
