@@ -61,8 +61,16 @@ function Chat() {
   const recognitionRef = useRef(null);
   const isListeningRef = useRef(false);
   const lastTranscriptRef = useRef("");
-  const timeoutRef = useRef(null);
+  // const timeoutRef = useRef(null);
   // let recognition = null;
+  const toggleListening = () => {
+      if (isListening) {
+        stopListening();
+      } else {
+        startListening();
+      }
+    };
+
 
   const clearChat = () => {
     setChat([{ role: "assistant", text: "🍽️ What do you want to cook?" }]);
@@ -81,59 +89,47 @@ function Chat() {
   }
 
   const recognition = new SpeechRecognition();
-      recognition.continuous = false; // 7s session
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = "en-US";
 
-      recognition.onresult = (event) => {
-        let transcript = event.results[event.results.length - 1][0].transcript;
-        transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  recognition.onresult = (event) => {
+    let transcript = event.results[event.results.length - 1][0].transcript;
+    transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
 
-        if (transcript === lastTranscriptRef.current) return;
-        lastTranscriptRef.current = transcript;
+    if (transcript && transcript !== lastTranscriptRef.current) {
+      lastTranscriptRef.current = transcript;
+      console.log("🗣️ Heard:", transcript);
+      setInput(transcript);
+      send(transcript);
+    }
+  };
 
-        console.log("🗣️ Heard:", transcript);
-        setInput(transcript);
-        send(transcript);
-      };
+  recognition.onerror = (e) => {
+    console.error("Speech recognition error:", e.error);
+  };
 
-      recognition.onerror = (e) => {
-        console.error("Speech recognition error:", e.error);
-      };
+  recognition.onend = () => {
+    setIsListening(false);
+    recognitionRef.current = null;
+    console.log("🎙️ Listening ended");
+  };
 
-      recognition.onend = () => {
-        console.log("🎙️ Recognition ended");
-        if (isListeningRef.current) {
-          // Restart recognition after 1 second
-          timeoutRef.current = setTimeout(() => {
-            console.log("🔁 Restarting recognition...");
-            startListening();
-          }, 1000);
-        }
-      };
+  recognition.start();
+  recognitionRef.current = recognition;
+  setIsListening(true);
+};
 
-      recognition.start();
-      recognitionRef.current = recognition;
-      isListeningRef.current = true;
-      setIsListening(true); // optional: update UI button
-    };
 
 
   // 2. Stop recognition loop
   const stopListening = () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-
-      isListeningRef.current = false;
-      setIsListening(false); // optional
-    };
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  };
 
 
 
@@ -586,9 +582,10 @@ function Chat() {
         }}>
           Send
         </button>
-        <button onClick={isListening ? stopListening : startListening} style={buttonStyle}>
+        <button onClick={toggleListening} style={buttonStyle}>
           {isListening ? "🛑" : "🎤"}
         </button>
+
 
 
       </div>
