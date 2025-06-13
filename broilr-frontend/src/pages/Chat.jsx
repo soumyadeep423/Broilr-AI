@@ -71,68 +71,76 @@ function Chat() {
     setStep(0);
     setFlow("dish");  // directly jump to dish input
   };
+
+  // 1. Start voice recognition
   const startListening = () => {
-      const SpeechRecognition = window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        alert("🎤 Speech recognition not supported.");
-        return;
-      }
+    if (!("webkitSpeechRecognition" in window)) {
+      alert("🎤 Speech recognition not supported in this browser.");
+      return;
+    }
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false; // don't use true
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
 
-      recognition.onresult = (event) => {
-        let transcript = event.results[event.results.length - 1][0].transcript;
-        transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
+    recognition.onresult = (event) => {
+      let transcript = event.results[event.results.length - 1][0].transcript;
+      transcript = transcript.toLowerCase().replace(/[^\w\s]/g, "").trim();
+      if (transcript === lastTranscriptRef.current) return;
+      lastTranscriptRef.current = transcript;
 
-        if (transcript === lastTranscriptRef.current) return;
-        lastTranscriptRef.current = transcript;
+      console.log("🗣️ Heard:", transcript);
+      setInput(transcript);
+      send(transcript);
+    };
 
-        console.log("🗣️ Heard:", transcript);
-        setInput(transcript);
-        send(transcript);
-      };
+    recognition.onerror = (e) => {
+      console.error("Speech recognition error:", e.error);
+    };
 
-      recognition.onerror = (e) => {
-        console.error("❌ Speech recognition error:", e.error);
-      };
-
-      recognition.onend = () => {
-        console.log("🎙️ Recognition ended");
-
+    recognition.onend = () => {
+      console.log("🎙️ Recognition ended");
+      if (isListeningRef.current) {
         // Restart after 1 second
-        if (isListeningRef.current) {
-          timeoutRef.current = setTimeout(() => {
-            console.log("🔄 Restarting recognition...");
-            startListening();
-          }, 1000); // wait 1 second then restart
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-      isListeningRef.current = true;
-      setIsListening(true);
-    };
-
-    const stopListening = () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
+        timeoutRef.current = setTimeout(() => {
+          console.log("🔁 Restarting recognition...");
+          startListening();
+        }, 1000);
       }
-      clearTimeout(timeoutRef.current); // stop pending restart
-      isListeningRef.current = false;
-      setIsListening(false);
     };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    isListeningRef.current = true;
+    setIsListening(true);
+  };
+
+  // 2. Stop recognition loop
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null; // Avoid looping
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    isListeningRef.current = false;
+    setIsListening(false);
+  };
+
 
     useEffect(() => {
       const last = chat[chat.length - 1];
-      if (last?.role === "assistant" && !isListeningRef.current) {
+      if (last?.role === "assistant") {
+        // restart listening on new assistant message
+        stopListening(); // stop any previous session cleanly
         startListening();
       }
     }, [chat]);
+
 
     useEffect(() => {
     const container = scrollContainerRef.current;
