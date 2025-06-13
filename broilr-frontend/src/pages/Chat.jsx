@@ -107,7 +107,7 @@ function Chat() {
           timeoutRef.current = setTimeout(() => {
             console.log("🔄 Restarting recognition...");
             startListening();
-          }, 1000); // wait 1 second then restart
+          }, 7000); // wait 1 second then restart
         }
       };
 
