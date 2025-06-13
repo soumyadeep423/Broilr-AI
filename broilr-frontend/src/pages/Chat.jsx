@@ -500,7 +500,7 @@ function Chat() {
 
 
   return (
-<div style={{ padding: "10px", maxHeight: "100vh", minHeight: "100vh", backgroundColor: "#121212", color: "#e0e0e0", boxSizing: "border-box", borderRadius: "12px" }}>
+<div style={{ padding: "10px", maxHeight: "100vh", backgroundColor: "#121212", color: "#e0e0e0", boxSizing: "border-box", borderRadius: "12px" }}>
     <div style={{
       maxWidth: "100%",
       width: "100%",
