@@ -1,0 +1,9 @@
+flask
+flask_cors 
+dotenv
+auth
+gemini
+pymongo
+google.generativeai
+bcrypt
+json
