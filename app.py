@@ -6,11 +6,10 @@ from auth import signup, login
 from gemini import generate_followup_questions, generate_structured_recipe, ask_gemini_about_step
 from pymongo import MongoClient
 
-# Load .env variables
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend calls
+CORS(app)
 
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client["robochef"]
@@ -20,27 +19,17 @@ users = db["users"]
 def home():
     return "Backend Service Running....."
 
-# ------------------------
-# Auth Routes
-# ------------------------
-
 @app.route("/signup", methods=["POST"])
 def route_signup():
     data = request.json
     success, msg = signup(data["username"], data["password"])
     return jsonify({"success": success, "message": msg})
 
-
 @app.route("/login", methods=["POST"])
 def route_login():
     data = request.json
     success, msg = login(data["username"], data["password"])
     return jsonify({"success": success, "message": msg})
-
-
-# ------------------------
-# Recipe Generation
-# ------------------------
 
 @app.route("/followups", methods=["POST"])
 def route_followups():
@@ -49,12 +38,11 @@ def route_followups():
     questions = generate_followup_questions(dish)
     return jsonify({"questions": questions})
 
-
 @app.route("/generate_recipe", methods=["POST"])
 def route_generate_recipe():
     data = request.json
     dish = data["dish"]
-    answers = data["answers"]  # dictionary
+    answers = data["answers"] 
     recipe = generate_structured_recipe(dish, answers)
     
     if data.get("username"):
@@ -64,7 +52,6 @@ def route_generate_recipe():
         )
 
     return jsonify({"recipe": recipe})
-
 
 @app.route("/ask_step", methods=["POST"])
 def route_ask_step():
@@ -76,10 +63,8 @@ def route_ask_step():
     answer, updated_history = ask_gemini_about_step(question, step, history)
     return jsonify({
         "answer": answer,
-        "history": updated_history  # Now guaranteed to be JSON serializable
+        "history": updated_history
     })
-
-
 
 @app.route("/load_recipes", methods=["POST"])
 def route_load_recipes():
@@ -121,8 +106,7 @@ def delete_recipe():
     return jsonify({"success": True, "message": "Recipe deleted."})
 
 
-# ------------------------
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT dynamically
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+    
